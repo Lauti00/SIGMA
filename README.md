@@ -25,10 +25,13 @@ streamlit run app.py
 - Datos básicos, reproductor y forma de onda.
 - Espectro FFT de un lado, con ventana rectangular, Hann o Hamming, y picos predominantes.
 - Filtros FIR Kaiser y filtros IIR Butterworth: pasabajo, pasaalto, pasabanda y rechaza banda.
-- Comparación temporal/espectral, respuesta en frecuencia, reproducción y descarga WAV.
+- Gráficos interactivos con hover, zoom, desplazamiento, selector de rango y comparación original/procesada.
+- Reproducción y descarga WAV.
 - MSE y SNR opcionales cuando se carga una referencia limpia alineada.
 
 ## Fundamento y responsabilidades de las bibliotecas
+
+La interfaz presenta los gráficos con Plotly dentro de Streamlit. Se puede explorar cada curva con hover, zoom y desplazamiento; en la forma temporal hay además un selector de rango. Los parámetros del filtro actualizan los gráficos automáticamente en señales cortas, con opción de aplicar manualmente en archivos largos.
 
 La lectura WAV y el diseño de filtros se apoyan en SciPy. FIR usa `np.convolve` para señales de hasta 200 000 muestras y `scipy.signal.fftconvolve` en audios más largos; ambos calculan la convolución discreta. IIR se desarrolla muestra a muestra con la forma directa II transpuesta para señales de hasta 200 000 muestras y usa `scipy.signal.sosfilt` para las más largas. Los coeficientes SOS se diseñan con `scipy.signal.butter`. La FFT usa `numpy.fft.rfft` y `rfftfreq` sobre un tramo elegido de hasta 30 s y 2 millones de muestras.
 
