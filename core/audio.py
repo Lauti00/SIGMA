@@ -21,7 +21,12 @@ def read_wav_file(uploaded_file):
     if original_channels > 2:
         raise ValueError("Esta versión admite archivos mono o estéreo.")
 
-    if np.issubdtype(raw_audio.dtype, np.integer):
+    if np.issubdtype(raw_audio.dtype, np.unsignedinteger):
+        # PCM WAV de 8 bits es unsigned y su silencio está centrado en 128.
+        info = np.iinfo(raw_audio.dtype)
+        midpoint = (info.max + 1) / 2
+        audio = (raw_audio.astype(np.float64) - midpoint) / midpoint
+    elif np.issubdtype(raw_audio.dtype, np.signedinteger):
         info = np.iinfo(raw_audio.dtype)
         scale = max(abs(info.min), abs(info.max))
         audio = raw_audio.astype(np.float64) / scale

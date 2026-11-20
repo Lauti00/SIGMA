@@ -73,17 +73,23 @@ def _add_time_signal(figure, signal, sample_rate, label, color, show_legend=True
             showlegend=False,
             line={"color": color, "width": 0.5},
             fill="tonexty",
-            fillcolor="rgba(79,107,237,0.12)" if label == "Original" else "rgba(240,138,36,0.12)",
+            fillcolor={
+                "Original": "rgba(79,107,237,0.12)",
+                "Procesada": "rgba(240,138,36,0.12)",
+                "Referencia limpia": "rgba(24,169,153,0.12)",
+            }.get(label, "rgba(128,128,128,0.12)"),
             hovertemplate="%{x:.3f} s<br>mín %{y:.4f}<extra>" + label + "</extra>",
         )
     )
 
 
-def time_comparison_figure(original, sample_rate, processed=None):
+def time_comparison_figure(original, sample_rate, processed=None, reference=None):
     figure = go.Figure()
     _add_time_signal(figure, original, sample_rate, "Original", COLORS["original"])
     if processed is not None:
         _add_time_signal(figure, processed, sample_rate, "Procesada", COLORS["processed"])
+    if reference is not None:
+        _add_time_signal(figure, reference, sample_rate, "Referencia limpia", COLORS["response"])
     title = "Señal en el tiempo" if processed is None else "Comparación temporal · original y procesada"
     _layout(figure, title, "Tiempo (s)", "Amplitud normalizada")
     figure.update_xaxes(rangeslider={"visible": True, "thickness": 0.08})
@@ -104,7 +110,7 @@ def _peak_preserving_decimate(frequencies, amplitude, max_points=40_000):
     return np.asarray(output_frequencies), np.asarray(output_amplitude)
 
 
-def spectrum_figure(frequencies, amplitude, peaks=None, processed=None):
+def spectrum_figure(frequencies, amplitude, peaks=None, processed=None, reference=None):
     frequencies, amplitude = _peak_preserving_decimate(frequencies, amplitude)
     figure = go.Figure()
     figure.add_trace(
@@ -125,6 +131,17 @@ def spectrum_figure(frequencies, amplitude, peaks=None, processed=None):
                 mode="lines",
                 name="Procesada",
                 line={"color": COLORS["processed"], "width": 1.2},
+            )
+        )
+    if reference is not None:
+        reference_f, reference_a = _peak_preserving_decimate(*reference)
+        figure.add_trace(
+            go.Scattergl(
+                x=reference_f,
+                y=reference_a,
+                mode="lines",
+                name="Referencia limpia",
+                line={"color": COLORS["response"], "width": 1.2, "dash": "dash"},
             )
         )
     if peaks:

@@ -39,6 +39,21 @@ class AudioReadTests(unittest.TestCase):
         self.assertAlmostEqual(audio[0], 0.0)
         self.assertGreater(audio[1], 0.0)
 
+    def test_unsigned_eight_bit_pcm_is_centered_around_silence(self):
+        original = np.array([128, 255, 0], dtype=np.uint8)
+        stream = io.BytesIO()
+        wavfile.write(stream, 8000, original)
+        stream.seek(0)
+
+        class Uploaded:
+            def getvalue(self):
+                return stream.getvalue()
+
+        _, audio, _ = read_wav_file(Uploaded())
+        self.assertAlmostEqual(audio[0], 0.0)
+        self.assertAlmostEqual(audio[1], 127 / 128)
+        self.assertAlmostEqual(audio[2], -1.0)
+
 
 if __name__ == "__main__":
     unittest.main()
