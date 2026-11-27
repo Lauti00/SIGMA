@@ -1,9 +1,16 @@
 import numpy as np
-from scipy.signal import butter, sosfilt, sosfilt_zi
+from scipy.signal import butter, cheby1, cheby2, ellip, sosfilt, sosfilt_zi
 
 from core.fir import FILTER_TYPES
 
 IIR_MANUAL_MAX_SAMPLES = 200_000
+IIR_FAMILIES = ("Butterworth", "Chebyshev I", "Chebyshev II", "Elíptico")
+IIR_DESIGNERS = {
+    "Butterworth": butter,
+    "Chebyshev I": cheby1,
+    "Chebyshev II": cheby2,
+    "Elíptico": ellip,
+}
 
 
 def iir_implementation_name(sample_count):
@@ -12,11 +19,22 @@ def iir_implementation_name(sample_count):
     return "Ecuaciones en diferencias optimizadas por SciPy (`sosfilt`) para archivos largos."
 
 
-def design_iir(filter_type, sample_rate, order, cutoff_hz):
-    """Diseña un Butterworth en secciones de segundo orden (SOS) con SciPy."""
+def design_iir(
+    filter_type,
+    sample_rate,
+    order,
+    cutoff_hz,
+    family="Butterworth",
+    passband_ripple_db=1.0,
+    stopband_attenuation_db=40.0,
+):
+    """Diseña un filtro IIR en secciones de segundo orden (SOS) con SciPy."""
     kind = FILTER_TYPES.get(filter_type)
     if kind is None:
         raise ValueError("Tipo de filtro IIR no reconocido.")
+    designer = IIR_DESIGNERS.get(family)
+    if designer is None:
+        raise ValueError("Familia de filtro IIR no reconocida.")
     if sample_rate <= 0:
         raise ValueError("La frecuencia de muestreo debe ser positiva.")
     order = int(order)
@@ -33,8 +51,36 @@ def design_iir(filter_type, sample_rate, order, cutoff_hz):
     if cutoffs.size == 2 and cutoffs[0] >= cutoffs[1]:
         raise ValueError("La frecuencia inferior debe ser menor que la superior.")
 
+    passband_ripple_db = float(passband_ripple_db)
+    stopband_attenuation_db = float(stopband_attenuation_db)
+    if family in ("Chebyshev I", "Elíptico") and (
+        not np.isfinite(passband_ripple_db) or passband_ripple_db <= 0
+    ):
+        raise ValueError("La ondulación de banda pasante debe ser positiva.")
+    if family in ("Chebyshev II", "Elíptico") and (
+        not np.isfinite(stopband_attenuation_db)
+        or stopband_attenuation_db <= 0
+    ):
+        raise ValueError("La atenuación de banda eliminada debe ser positiva.")
+    if family == "Elíptico" and stopband_attenuation_db <= passband_ripple_db:
+        raise ValueError(
+            "La atenuación de banda eliminada debe superar la ondulación "
+            "de banda pasante."
+        )
+
     cutoff_argument = float(cutoffs[0]) if cutoffs.size == 1 else cutoffs
-    return butter(order, cutoff_argument, btype=kind, fs=sample_rate, output="sos")
+    design_arguments = [order]
+    if family in ("Chebyshev I", "Elíptico"):
+        design_arguments.append(passband_ripple_db)
+    if family in ("Chebyshev II", "Elíptico"):
+        design_arguments.append(stopband_attenuation_db)
+    design_arguments.append(cutoff_argument)
+    return designer(
+        *design_arguments,
+        btype=kind,
+        fs=sample_rate,
+        output="sos",
+    )
 
 
 def apply_iir(audio, sos):

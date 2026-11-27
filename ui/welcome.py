@@ -19,7 +19,7 @@ STEPS = (
 )
 FEATURES = (
     "FIR · Kaiser",
-    "IIR · Butterworth",
+    "IIR · Butterworth, Chebyshev I/II y elíptico",
     "FFT con ventanas",
     "Ruido con SNR controlada",
     "MSE y SNR con referencia limpia",

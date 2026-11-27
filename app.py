@@ -20,6 +20,7 @@ from core.fourier import (
     find_dominant_frequencies,
 )
 from core.iir import (
+    IIR_FAMILIES,
     apply_iir,
     design_iir,
     iir_implementation_name,
@@ -247,7 +248,7 @@ def render_dashboard(
         '<div class="sigma-dashboard-grid">'
         + dashboard_item(
             "Familia",
-            "FIR · Kaiser" if method.startswith("FIR") else "IIR · Butterworth",
+            method,
             "Arquitectura del filtro",
         )
         + dashboard_item(
@@ -278,7 +279,7 @@ def render_dashboard(
         )
     else:
         st.caption(
-            f"Butterworth · Frecuencia de Nyquist: {nyquist:.0f} Hz"
+            f"{method} · Frecuencia de Nyquist: {nyquist:.0f} Hz"
         )
 
     section(
@@ -667,11 +668,13 @@ with st.container(border=True):
     with col_method:
         method = st.selectbox(
             "Familia del filtro",
-            ["FIR · Kaiser", "IIR · Butterworth"],
+            ["FIR · Kaiser"]
+            + [f"IIR · {family}" for family in IIR_FAMILIES],
             key="sigma_filter_method",
             help=(
                 "FIR utiliza un diseño por ventana Kaiser. "
-                "IIR utiliza Butterworth."
+                "IIR ofrece diseños Butterworth, Chebyshev I, "
+                "Chebyshev II y elíptico."
             ),
         )
 
@@ -684,6 +687,7 @@ with st.container(border=True):
 
     filter_kind = FILTER_TYPES[filter_label]
     is_fir = method.startswith("FIR")
+    iir_family = method.split(" · ", 1)[1] if not is_fir else None
 
     with col_order:
         order = st.slider(
@@ -693,6 +697,9 @@ with st.container(border=True):
             value=64 if is_fir else 4,
             key="sigma_filter_order",
         )
+
+    passband_ripple = 1.0
+    stopband_attenuation = 40.0
 
     st.divider()
     st.markdown("#### 2. Parámetros de frecuencia")
@@ -747,7 +754,7 @@ with st.container(border=True):
             else:
                 beta = None
                 st.info(
-                    "Butterworth no utiliza el parámetro Beta."
+                    "Los filtros IIR no utilizan el parámetro Beta."
                 )
 
     else:
@@ -831,7 +838,54 @@ with st.container(border=True):
         else:
             beta = None
             st.info(
-                "Butterworth no utiliza el parámetro Beta."
+                "Los filtros IIR no utilizan el parámetro Beta."
+            )
+
+    if not is_fir:
+        needs_ripple = iir_family in ("Chebyshev I", "Elíptico")
+        needs_attenuation = iir_family in ("Chebyshev II", "Elíptico")
+
+        if needs_ripple and needs_attenuation:
+            ripple_col, attenuation_col = st.columns(2)
+            with ripple_col:
+                passband_ripple = st.number_input(
+                    "Ondulación de banda pasante (dB)",
+                    min_value=0.01,
+                    max_value=20.0,
+                    value=1.0,
+                    step=0.1,
+                    key="sigma_iir_passband_ripple",
+                    help="Parámetro rp de Chebyshev I y elíptico.",
+                )
+            with attenuation_col:
+                stopband_attenuation = st.number_input(
+                    "Atenuación de banda eliminada (dB)",
+                    min_value=0.01,
+                    max_value=120.0,
+                    value=40.0,
+                    step=1.0,
+                    key="sigma_iir_stopband_attenuation",
+                    help="Parámetro rs de Chebyshev II y elíptico.",
+                )
+        elif needs_ripple:
+            passband_ripple = st.number_input(
+                "Ondulación de banda pasante (dB)",
+                min_value=0.01,
+                max_value=20.0,
+                value=1.0,
+                step=0.1,
+                key="sigma_iir_passband_ripple",
+                help="Parámetro rp de Chebyshev I.",
+            )
+        elif needs_attenuation:
+            stopband_attenuation = st.number_input(
+                "Atenuación de banda eliminada (dB)",
+                min_value=0.01,
+                max_value=120.0,
+                value=40.0,
+                step=1.0,
+                key="sigma_iir_stopband_attenuation",
+                help="Parámetro rs de Chebyshev II.",
             )
 
     st.divider()
@@ -841,7 +895,7 @@ with st.container(border=True):
 
     config_cols[0].metric(
         "Familia",
-        "FIR" if is_fir else "IIR",
+        method,
     )
 
     config_cols[1].metric(
@@ -991,6 +1045,9 @@ filter_key = (
     tuple(cutoff),
     int(order),
     beta,
+    iir_family,
+    passband_ripple,
+    stopband_attenuation,
 )
 
 previous_key = (
@@ -1041,6 +1098,9 @@ if should_apply:
                 sample_rate,
                 order,
                 cutoff,
+                family=iir_family,
+                passband_ripple_db=passband_ripple,
+                stopband_attenuation_db=stopband_attenuation,
             )
 
             processed = apply_iir(
@@ -1055,7 +1115,7 @@ if should_apply:
 
             implementation = (
                 iir_implementation_name(len(audio))
-                + " Diseño Butterworth con SciPy."
+                + f" Diseño {iir_family} con SciPy."
             )
 
             effective_order = order
@@ -1295,7 +1355,7 @@ with compare_tab:
 
         result_cols[0].metric(
             "Familia",
-            "FIR" if is_fir else "IIR",
+            method,
         )
 
         result_cols[1].metric(
@@ -1346,15 +1406,14 @@ with compare_tab:
         )
 
         comparison_help = (
-            "Explorá las gráficas de forma interactiva. "
-            "Podés acercar, desplazar y ocultar curvas "
-            "desde la leyenda."
+            "Cada señal aparece en su propio panel alineado y con "
+            "la misma escala, para que las curvas no se tapen. "
+            "Podés acercar y desplazar las gráficas."
         )
 
         if clean_reference is not None:
             comparison_help += (
-                " La referencia limpia también aparece "
-                "en la comparación."
+                " La referencia limpia se muestra en un tercer panel."
             )
 
         st.caption(comparison_help)
@@ -1367,6 +1426,7 @@ with compare_tab:
                 sample_rate,
                 display_result["processed"],
                 reference=clean_reference,
+                separate=True,
             ),
             key="sigma_compare_time_chart",
         )
@@ -1379,6 +1439,7 @@ with compare_tab:
                 amplitude,
                 processed=processed_spectrum,
                 reference=reference_spectrum,
+                separate=True,
             ),
             key="sigma_compare_frequency_chart",
         )

@@ -24,9 +24,9 @@ streamlit run app.py
 - Carga WAV mono o estéreo; el estéreo se promedia a mono.
 - Datos básicos, reproductor y forma de onda.
 - Espectro FFT de un lado, con ventana rectangular, Hann o Hamming, y picos predominantes.
-- Filtros FIR Kaiser y filtros IIR Butterworth: pasabajo, pasaalto, pasabanda y rechaza banda.
+- Filtros FIR Kaiser y filtros IIR Butterworth, Chebyshev I, Chebyshev II y elípticos: pasabajo, pasaalto, pasabanda y rechaza banda.
 - Generación reproducible de ruido blanco o tonos sinusoidales a una SNR configurada, con protección contra clipping.
-- Gráficos interactivos con hover, zoom, desplazamiento, selector de rango y comparación original/procesada.
+- Gráficos interactivos con hover, zoom, desplazamiento y selector de rango; las comparaciones muestran original, procesada y referencia en paneles alineados con escalas compartidas.
 - Reproducción y descarga WAV.
 - MSE y SNR opcionales cuando se carga una referencia limpia alineada.
 
@@ -34,7 +34,7 @@ streamlit run app.py
 
 La interfaz presenta los gráficos con Plotly dentro de Streamlit. Se puede explorar cada curva con hover, zoom y desplazamiento; en la forma temporal hay además un selector de rango. Los parámetros del filtro actualizan los gráficos automáticamente en señales cortas, con opción de aplicar manualmente en archivos largos. El ruido artificial se escala según su potencia RMS para obtener la SNR seleccionada; la mezcla y la referencia reciben la misma ganancia para evitar clipping sin alterar esa SNR.
 
-La lectura WAV y el diseño de filtros se apoyan en SciPy. FIR usa `np.convolve` para señales de hasta 200 000 muestras y `scipy.signal.fftconvolve` en audios más largos; ambos calculan la convolución discreta. IIR se desarrolla muestra a muestra con la forma directa II transpuesta para señales de hasta 200 000 muestras y usa `scipy.signal.sosfilt` para las más largas. Los coeficientes SOS se diseñan con `scipy.signal.butter`. La FFT usa `numpy.fft.rfft` y `rfftfreq` sobre un tramo elegido de hasta 30 s y 2 millones de muestras.
+La lectura WAV y el diseño de filtros se apoyan en SciPy. FIR usa `np.convolve` para señales de hasta 200 000 muestras y `scipy.signal.fftconvolve` en audios más largos; ambos calculan la convolución discreta. IIR se desarrolla muestra a muestra con la forma directa II transpuesta para señales de hasta 200 000 muestras y usa `scipy.signal.sosfilt` para las más largas. Sus coeficientes SOS se diseñan con Butterworth, Chebyshev I, Chebyshev II o elíptico. Chebyshev I y elíptico permiten configurar la ondulación de banda pasante; Chebyshev II y elíptico, la atenuación de banda eliminada. La FFT usa `numpy.fft.rfft` y `rfftfreq` sobre un tramo elegido de hasta 30 s y 2 millones de muestras.
 
 La FFT produce muestras discretas del espectro. Si una frecuencia no coincide con un bin, su energía se reparte en bins cercanos (leakage). La ventana Hann o Hamming atenúa los lóbulos laterales, aunque ensancha el pico. La amplitud se normaliza por la suma de la ventana y por eso un tono alineado conserva aproximadamente su amplitud pico. Los gráficos temporales de archivos largos muestran una envolvente de mínimos y máximos para evitar dibujar cada muestra en pantalla.
 

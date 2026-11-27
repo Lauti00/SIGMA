@@ -12,7 +12,7 @@ Usen `samples/audio_examples/demo_tonos_440_2500Hz.wav`. Es una suma de tonos de
 2. Seleccionen ventana rectangular y verifiquen picos cerca de 440 Hz y 2500 Hz.
 3. Apliquen un pasabajo FIR con corte de 1000 Hz.
 4. Comparen el espectro: debe permanecer el componente de 440 Hz y bajar el de 2500 Hz.
-5. Repitan con Butterworth IIR y comparen la transición, respuesta y audio.
+5. Repitan con filtros IIR Butterworth, Chebyshev I, Chebyshev II y elíptico; comparen la transición, respuesta y audio.
 
 La frecuencia de Nyquist es Fs/2 = 8000 Hz. La separación entre bins de FFT es Δf = Fs/N; en este archivo, 16 000/48 000 = 1/3 Hz.
 
@@ -38,9 +38,9 @@ El ruido blanco usa una semilla reproducible asociada al archivo; los tonos tamb
 
 Un FIR se describe mediante la convolución `y[n] = Σ b[k] x[n-k]`. En SIGMA, NumPy calcula la convolución directa para señales de hasta 200 000 muestras; para archivos largos se usa la convolución por FFT de `scipy.signal.fftconvolve`, que obtiene el mismo resultado de forma más eficiente. Los coeficientes los diseña `scipy.signal.firwin` con ventana Kaiser. Para facilitar comparar los sonidos, el resultado se recorta centrado y se compensa el retardo de grupo del FIR lineal en fase; es procesamiento fuera de línea, no filtrado en tiempo real.
 
-Un IIR contiene muestras anteriores de entrada y de salida: `y[n] = (Σ b[k]x[n-k] - Σ a[k]y[n-k])/a[0]`. SciPy diseña los coeficientes Butterworth en secciones de segundo orden (SOS); SIGMA aplica esas secciones muestra a muestra con la forma directa II transpuesta en señales de hasta 200 000 muestras. Para las más largas, `scipy.signal.sosfilt` realiza la misma recurrencia en código optimizado. Cada sección comienza en un estado estacionario coherente con la primera muestra. El procesamiento es causal.
+Un IIR contiene muestras anteriores de entrada y de salida: `y[n] = (Σ b[k]x[n-k] - Σ a[k]y[n-k])/a[0]`. SciPy diseña los coeficientes Butterworth, Chebyshev I, Chebyshev II o elípticos en secciones de segundo orden (SOS); SIGMA aplica esas secciones muestra a muestra con la forma directa II transpuesta en señales de hasta 200 000 muestras. Para las más largas, `scipy.signal.sosfilt` realiza la misma recurrencia en código optimizado. Cada sección comienza en un estado estacionario coherente con la primera muestra. El procesamiento es causal.
 
-Butterworth se usa como primera alternativa porque su magnitud en la banda pasante es suave, sin ondulaciones intencionales. FIR e IIR pueden tener distinto orden y distinta transición, latencia y respuesta de fase; no se deben comparar solo por el valor numérico del orden.
+Butterworth tiene una banda pasante suave, sin ondulaciones intencionales. Chebyshev I permite ondulación en la banda pasante; Chebyshev II, en la banda eliminada; y el elíptico, en ambas. SIGMA ofrece controles en dB para esas ondulaciones y atenuación, con valores iniciales de 1 dB y 40 dB. FIR e IIR pueden tener distinto orden y distinta transición, latencia y respuesta de fase; no se deben comparar solo por el valor numérico del orden.
 
 ## 6. Métricas (solo con referencia limpia)
 
@@ -53,6 +53,6 @@ La aplicación acepta opcionalmente otro WAV como referencia limpia. Para que la
 - La detección de tonos se valida con frecuencias conocidas en el WAV sintético.
 - La atenuación se valida tanto en la FFT de salida como en la respuesta en frecuencia.
 - FIR: diseño Kaiser asistido por SciPy; convolución realizada en el código con NumPy.
-- IIR: diseño Butterworth asistido por SciPy; ecuaciones en diferencias implementadas en el código por SOS.
+- IIR: diseño Butterworth, Chebyshev I/II o elíptico asistido por SciPy; ecuaciones en diferencias implementadas en el código por SOS.
 - WAV y FFT: lectura/escritura apoyada por SciPy; FFT y ejes de muestra/frecuencia calculados con NumPy.
 - Los filtros son herramientas de procesamiento, no eliminan automáticamente ruido sin afectar otras componentes. El resultado auditivo depende del contenido y los parámetros.

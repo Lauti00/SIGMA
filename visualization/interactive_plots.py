@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
 COLORS = {
@@ -124,8 +125,15 @@ def _add_time_signal(
     label,
     color,
     show_legend=True,
+    row=None,
 ):
     """Agrega una señal temporal al gráfico."""
+
+    def add_trace(trace):
+        if row is None:
+            figure.add_trace(trace)
+        else:
+            figure.add_trace(trace, row=row, col=1)
 
     times, lows, highs, reduced = _minmax_decimate(
         signal, sample_rate
@@ -134,7 +142,7 @@ def _add_time_signal(
     group = label.lower()
 
     if not reduced:
-        figure.add_trace(
+        add_trace(
             go.Scattergl(
                 x=times,
                 y=highs,
@@ -154,7 +162,7 @@ def _add_time_signal(
         )
         return
 
-    figure.add_trace(
+    add_trace(
         go.Scattergl(
             x=times,
             y=highs,
@@ -180,7 +188,7 @@ def _add_time_signal(
         "Referencia limpia": "rgba(32,201,166,0.13)",
     }
 
-    figure.add_trace(
+    add_trace(
         go.Scattergl(
             x=times,
             y=lows,
@@ -210,36 +218,60 @@ def time_comparison_figure(
     sample_rate,
     processed=None,
     reference=None,
+    separate=False,
 ):
-    """Gráfico temporal de la señal original y sus comparaciones."""
-
-    figure = go.Figure()
-
-    _add_time_signal(
-        figure,
-        original,
-        sample_rate,
-        "Original",
-        COLORS["original"],
-    )
+    """Gráfico temporal superpuesto o con señales en paneles separados."""
+    signals = [
+        ("Original", original, COLORS["original"]),
+    ]
 
     if processed is not None:
-        _add_time_signal(
-            figure,
-            processed,
-            sample_rate,
-            "Procesada",
-            COLORS["processed"],
+        signals.append(
+            ("Procesada", processed, COLORS["processed"])
         )
 
     if reference is not None:
-        _add_time_signal(
-            figure,
-            reference,
-            sample_rate,
-            "Referencia limpia",
-            COLORS["response"],
+        signals.append(
+            ("Referencia limpia", reference, COLORS["response"])
         )
+
+    separate = separate and len(signals) > 1
+    if separate:
+        figure = make_subplots(
+            rows=len(signals),
+            cols=1,
+            shared_xaxes=True,
+            shared_yaxes=True,
+            vertical_spacing=0.08,
+            subplot_titles=[label for label, _, _ in signals],
+        )
+        for row in range(2, len(signals) + 1):
+            figure.update_yaxes(matches="y", row=row, col=1)
+        for row, (label, signal, color) in enumerate(signals, start=1):
+            _add_time_signal(
+                figure,
+                signal,
+                sample_rate,
+                label,
+                color,
+                show_legend=False,
+                row=row,
+            )
+        figure.update_annotations(
+            font={"color": COLORS["text"], "size": 13}
+        )
+        height = 280 * len(signals) + 140
+    else:
+        figure = go.Figure()
+        for label, signal, color in signals:
+            _add_time_signal(
+                figure,
+                signal,
+                sample_rate,
+                label,
+                color,
+            )
+        height = 440
 
     title = (
         "Señal en el tiempo"
@@ -252,18 +284,25 @@ def time_comparison_figure(
         title,
         "Tiempo (s)",
         "Amplitud normalizada",
-        height=440,
+        height=height,
     )
 
-    figure.update_xaxes(
-        rangeslider={
-            "visible": True,
-            "thickness": 0.065,
-            "bgcolor": "rgba(120,140,180,0.06)",
-            "bordercolor": "rgba(160,175,210,0.15)",
-            "borderwidth": 1,
-        }
-    )
+    range_slider = {
+        "visible": True,
+        "thickness": 0.065,
+        "bgcolor": "rgba(120,140,180,0.06)",
+        "bordercolor": "rgba(160,175,210,0.15)",
+        "borderwidth": 1,
+    }
+    if separate:
+        figure.update_xaxes(rangeslider={"visible": False})
+        figure.update_xaxes(
+            rangeslider=range_slider,
+            row=len(signals),
+            col=1,
+        )
+    else:
+        figure.update_xaxes(rangeslider=range_slider)
 
     return figure
 
@@ -308,83 +347,79 @@ def spectrum_figure(
     peaks=None,
     processed=None,
     reference=None,
+    separate=False,
 ):
-    """Espectro FFT con comparación y marcadores de frecuencias dominantes."""
-
-    frequencies, amplitude = _peak_preserving_decimate(
-        frequencies,
-        amplitude,
-    )
-
-    figure = go.Figure()
-
-    figure.add_trace(
-        go.Scattergl(
-            x=frequencies,
-            y=amplitude,
-            mode="lines",
-            name="Original",
-            line={
-                "color": COLORS["original"],
-                "width": 1.7,
-            },
-            hovertemplate=(
-                "Frecuencia: %{x:.2f} Hz<br>"
-                "Amplitud: %{y:.6f}"
-                "<extra>Original</extra>"
-            ),
-        )
-    )
+    """Espectro FFT superpuesto o comparado en paneles separados."""
+    spectra = [
+        ("Original", (frequencies, amplitude), COLORS["original"], "solid"),
+    ]
 
     if processed is not None:
-        processed_f, processed_a = _peak_preserving_decimate(
-            *processed
-        )
-
-        figure.add_trace(
-            go.Scattergl(
-                x=processed_f,
-                y=processed_a,
-                mode="lines",
-                name="Procesada",
-                line={
-                    "color": COLORS["processed"],
-                    "width": 1.7,
-                },
-                hovertemplate=(
-                    "Frecuencia: %{x:.2f} Hz<br>"
-                    "Amplitud: %{y:.6f}"
-                    "<extra>Procesada</extra>"
-                ),
-            )
+        spectra.append(
+            ("Procesada", processed, COLORS["processed"], "solid")
         )
 
     if reference is not None:
-        reference_f, reference_a = _peak_preserving_decimate(
-            *reference
+        spectra.append(
+            (
+                "Referencia limpia",
+                reference,
+                COLORS["response"],
+                "dash",
+            )
         )
 
-        figure.add_trace(
+    separate = separate and len(spectra) > 1
+    if separate:
+        figure = make_subplots(
+            rows=len(spectra),
+            cols=1,
+            shared_xaxes=True,
+            shared_yaxes=True,
+            vertical_spacing=0.08,
+            subplot_titles=[label for label, _, _, _ in spectra],
+        )
+        for row in range(2, len(spectra) + 1):
+            figure.update_yaxes(matches="y", row=row, col=1)
+        figure.update_annotations(
+            font={"color": COLORS["text"], "size": 13}
+        )
+        height = 280 * len(spectra) + 140
+    else:
+        figure = go.Figure()
+        height = 440
+
+    def add_trace(trace, row):
+        if separate:
+            figure.add_trace(trace, row=row, col=1)
+        else:
+            figure.add_trace(trace)
+
+    for row, (label, spectrum, color, dash) in enumerate(spectra, start=1):
+        spectrum_f, spectrum_a = _peak_preserving_decimate(*spectrum)
+        add_trace(
             go.Scattergl(
-                x=reference_f,
-                y=reference_a,
+                x=spectrum_f,
+                y=spectrum_a,
                 mode="lines",
-                name="Referencia limpia",
+                name=label,
+                showlegend=not separate,
                 line={
-                    "color": COLORS["response"],
-                    "width": 1.5,
-                    "dash": "dash",
+                    "color": color,
+                    "width": 1.7,
+                    "dash": dash,
                 },
                 hovertemplate=(
                     "Frecuencia: %{x:.2f} Hz<br>"
                     "Amplitud: %{y:.6f}"
-                    "<extra>Referencia limpia</extra>"
+                    f"<extra>{label}</extra>"
                 ),
-            )
+            ),
+            row,
         )
 
     if peaks:
-        figure.add_trace(
+        add_trace(
             go.Scattergl(
                 x=[p["frequency"] for p in peaks],
                 y=[p["amplitude"] for p in peaks],
@@ -413,7 +448,8 @@ def spectrum_figure(
                     "Amplitud: %{y:.6f}"
                     "<extra>Pico dominante</extra>"
                 ),
-            )
+            ),
+            1,
         )
 
     title = (
@@ -427,7 +463,7 @@ def spectrum_figure(
         title,
         "Frecuencia (Hz)",
         "Amplitud",
-        height=440,
+        height=height,
     )
 
     figure.update_xaxes(rangemode="tozero")
